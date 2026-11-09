@@ -1,0 +1,8 @@
+﻿mode_title,mSA,Precision,Success,CLE_px,FPS
+1. RGB Only,22.36,38.17,20.23,94.0,207.5
+2. Thermal Only,48.29,64.33,61.69,85.1,204.7
+3. Fixed RGB-T Fusion,47.62,62.96,60.9,91.7,183.1
+4. Adaptive (Quality Only),48.02,65.97,61.07,82.3,180.2
+5. Adaptive (Quality + Conf),54.29,72.61,69.55,57.4,173.5
+6. Adaptive + Temp Smoothing,55.85,74.54,71.37,54.6,171.6
+7. Proposed Full (+ Kalman),55.88,74.42,71.28,57.4,168.7
