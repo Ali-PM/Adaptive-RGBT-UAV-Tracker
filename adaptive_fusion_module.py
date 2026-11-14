@@ -5,13 +5,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class ImageQualityAssessor:
     def __init__(self, eps=1e-6):
         self.eps = eps
 
     def compute_rgb_quality(self, rgb_patch):
         if rgb_patch is None or rgb_patch.size == 0: return 0.5
-        gray = cv2.cvtColor(rgb_patch.astype(np.uint8), cv2.COLOR_RGB2GRAY) if len(rgb_patch.shape) == 3 else rgb_patch.astype(np.uint8)
+        gray = cv2.cvtColor(rgb_patch.astype(np.uint8), cv2.COLOR_RGB2GRAY) if len(
+            rgb_patch.shape) == 3 else rgb_patch.astype(np.uint8)
         gray_norm = gray.astype(np.float32) / 255.0
         laplacian_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
         sharpness = np.clip(laplacian_var / 250.0, 0.2, 1.0)
@@ -20,12 +22,14 @@ class ImageQualityAssessor:
 
     def compute_thermal_quality(self, ir_patch):
         if ir_patch is None or ir_patch.size == 0: return 0.5
-        gray = cv2.cvtColor(ir_patch.astype(np.uint8), cv2.COLOR_RGB2GRAY) if len(ir_patch.shape) == 3 else ir_patch.astype(np.uint8)
+        gray = cv2.cvtColor(ir_patch.astype(np.uint8), cv2.COLOR_RGB2GRAY) if len(
+            ir_patch.shape) == 3 else ir_patch.astype(np.uint8)
         gray_norm = gray.astype(np.float32) / 255.0
         laplacian_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
         sharpness = np.clip(laplacian_var / 250.0, 0.2, 1.0)
         contrast = np.clip(np.std(gray_norm) * 4.0, 0.2, 1.0)
         return float(0.5 * sharpness + 0.5 * contrast)
+
 
 class DualFlowSemanticModulator:
     def __init__(self, csm_cross_ratio=0.20):
@@ -37,7 +41,8 @@ class DualFlowSemanticModulator:
         resp_rgb_cross = F.conv2d(feat_rgb, kernel_ir) * 0.001
         resp_ir_cross = F.conv2d(feat_ir, kernel_rgb) * 0.001
         r = self.csm_cross_ratio
-        return (1.0 - r) * resp_rgb_same + r * resp_rgb_cross, (1.0 - r) * resp_ir_same + r * resp_ir_cross, resp_rgb_same, resp_ir_same
+        return (1.0 - r) * resp_rgb_same + r * resp_rgb_cross, (
+                    1.0 - r) * resp_ir_same + r * resp_ir_cross, resp_rgb_same, resp_ir_same
 
     @staticmethod
     def compute_ism_score(feat_search, kernel_template, response_map):
@@ -51,9 +56,12 @@ class DualFlowSemanticModulator:
             kh, kw = kernel_template.shape[2], kernel_template.shape[3]
             y1, x1 = max(0, min(py, feat_search.shape[2] - kh)), max(0, min(px, feat_search.shape[3] - kw))
             x_k = feat_search[mid_scale:mid_scale + 1, :, y1:y1 + kh, x1:x1 + kw]
-            if x_k.shape != kernel_template.shape: x_k = F.interpolate(x_k, size=(kh, kw), mode='bilinear', align_corners=False)
-            ism_sim = float(torch.sum(F.normalize(kernel_template, p=2, dim=1) * F.normalize(x_k, p=2, dim=1), dim=1).mean().item())
+            if x_k.shape != kernel_template.shape: x_k = F.interpolate(x_k, size=(kh, kw), mode='bilinear',
+                                                                       align_corners=False)
+            ism_sim = float(
+                torch.sum(F.normalize(kernel_template, p=2, dim=1) * F.normalize(x_k, p=2, dim=1), dim=1).mean().item())
             return float(np.clip((ism_sim + 0.1) / 0.8, 0.1, 1.0))
+
 
 class LastLayerAdaptiveFusionModule(nn.Module):
     def __init__(self, smoothing_lambda=0.70, mode='full_adaptive', fixed_alpha=0.5, alpha_min=0.05, alpha_max=0.95):
@@ -103,8 +111,10 @@ class LastLayerAdaptiveFusionModule(nn.Module):
         score_ir = c_ir * float(self.ism_score_ir) * (0.8 + 0.2 * q_ir)
         alpha_t = score_rgb / (score_rgb + score_ir + self.eps)
 
-        if score_rgb > 1.3 * score_ir and c_rgb > 0.2: alpha_t = min(alpha_t * 1.2, self.alpha_max)
-        elif score_ir > 1.3 * score_rgb and c_ir > 0.2: alpha_t = max(alpha_t * 0.8, self.alpha_min)
+        if score_rgb > 1.3 * score_ir and c_rgb > 0.2:
+            alpha_t = min(alpha_t * 1.2, self.alpha_max)
+        elif score_ir > 1.3 * score_rgb and c_ir > 0.2:
+            alpha_t = max(alpha_t * 0.8, self.alpha_min)
 
         alpha_t = float(np.clip(alpha_t, self.alpha_min, self.alpha_max))
         self.last_alpha_conf = alpha_t
@@ -122,7 +132,10 @@ class LastLayerAdaptiveFusionModule(nn.Module):
         return (resp - torch.mean(resp)) / (torch.std(resp, unbiased=False) + 1e-6)
 
     def forward(self, feat_rgb, feat_thermal, kernel_rgb, kernel_thermal, rgb_patch=None, ir_patch=None):
-        resp_rgb_csm, resp_ir_csm, resp_rgb_same, resp_ir_same = self.dfsc_modulator.compute_csm_responses(feat_rgb, feat_thermal, kernel_rgb, kernel_thermal)
+        resp_rgb_csm, resp_ir_csm, resp_rgb_same, resp_ir_same = self.dfsc_modulator.compute_csm_responses(feat_rgb,
+                                                                                                           feat_thermal,
+                                                                                                           kernel_rgb,
+                                                                                                           kernel_thermal)
         if resp_rgb_same.shape[-1] > 3:
             mid_s = resp_rgb_same.shape[0] // 2
             self.prev_confidence_rgb, _ = self.compute_psr_confidence(resp_rgb_same[mid_s, 0].detach().cpu().numpy())
@@ -131,13 +144,16 @@ class LastLayerAdaptiveFusionModule(nn.Module):
         if self.mode not in ('rgb_only', 'thermal_only', 'fixed_fusion', 'quality_only'):
             self.ism_score_rgb = self.dfsc_modulator.compute_ism_score(feat_rgb, kernel_rgb, resp_rgb_same)
             self.ism_score_ir = self.dfsc_modulator.compute_ism_score(feat_thermal, kernel_thermal, resp_ir_same)
-            resp_rgb_use, resp_ir_use = (resp_rgb_csm, resp_ir_csm) if (self.prev_confidence_rgb > 0.15 and self.prev_confidence_ir > 0.15) else (resp_rgb_same, resp_ir_same)
+            resp_rgb_use, resp_ir_use = (resp_rgb_csm, resp_ir_csm) if (
+                        self.prev_confidence_rgb > 0.15 and self.prev_confidence_ir > 0.15) else (resp_rgb_same,
+                                                                                                  resp_ir_same)
         else:
             resp_rgb_use, resp_ir_use = resp_rgb_same, resp_ir_same
 
         alpha_tilde, q_rgb, q_ir = self.compute_adaptive_alpha(rgb_patch, ir_patch)
         feat_fusion = alpha_tilde * feat_rgb + (1.0 - alpha_tilde) * feat_thermal
-        resp_fused = alpha_tilde * self._global_zscore(resp_rgb_use) + (1.0 - alpha_tilde) * self._global_zscore(resp_ir_use)
+        resp_fused = alpha_tilde * self._global_zscore(resp_rgb_use) + (1.0 - alpha_tilde) * self._global_zscore(
+            resp_ir_use)
         return feat_fusion, resp_fused, resp_rgb_use, resp_ir_use, alpha_tilde, q_rgb, q_ir
 
 
@@ -173,7 +189,7 @@ class TargetKalmanPredictor:
         self.kf.predict()
         meas_cy, meas_cx = float(measured_center_yx[0]), float(measured_center_yx[1])
         prev_cy, prev_cx = float(prev_center_yx[0]), float(prev_center_yx[1])
-        
+
         step_y, step_x = meas_cy - prev_cy, meas_cx - prev_cx
         step_dist = float(np.hypot(step_y, step_x))
         vel_mag = float(np.hypot(self.vel_yx[0], self.vel_yx[1]))
@@ -182,7 +198,7 @@ class TargetKalmanPredictor:
             self.stable_steps += 1
             corrected = self.kf.correct(np.array([[meas_cx], [meas_cy]], dtype=np.float32))
             self.vel_yx = 0.75 * self.vel_yx + 0.25 * np.array([step_y, step_x], dtype=np.float32)
-            
+
             if self.stable_steps >= 8 and confidence < 0.225 and step_dist < 12.0 and vel_mag < 3.5:
                 search_cy = meas_cy + np.clip(0.06 * float(self.vel_yx[0]), -0.8, 0.8)
                 search_cx = meas_cx + np.clip(0.06 * float(self.vel_yx[1]), -0.8, 0.8)
